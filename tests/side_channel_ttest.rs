@@ -2,8 +2,8 @@
 //!
 //! These tests apply Welch's t-test to timing measurements of key cryptographic
 //! operations, checking that no statistically significant timing difference exists
-//! between different classes of inputs.  Following the dudect approach, a |t| < 4.5
-//! threshold (roughly p > 0.001) is used as the pass criterion.
+//! between different classes of inputs. Following the dudect approach, this suite
+//! uses a conservative |t| < 6.0 pass threshold.
 //!
 //! Design notes:
 //! - Challenge polynomials in Dilithium-style schemes are sparse (coefficients in
@@ -16,13 +16,20 @@
 //!   because invalid signatures trigger early-exit paths (hash mismatch, etc.),
 //!   which is expected behaviour, not a side-channel bug.
 
+use std::hint::black_box;
 use std::time::Instant;
 
 use pabs_crf::*;
+use rand::rngs::StdRng;
+use rand::seq::SliceRandom;
+use rand::SeedableRng;
 
 const N_SAMPLES: usize = 1000;
 const T_THRESHOLD: f64 = 6.0;
 const WARMUP_ITERS: usize = 20;
+const CTCMP_SAMPLES_PER_CLASS: usize = 5000;
+const CTCMP_BATCH_ITERS: usize = 64;
+const CTCMP_WARMUP_ITERS: usize = 256;
 
 fn welch_t_test(group_a: &[f64], group_b: &[f64]) -> (f64, f64) {
     let n_a = group_a.len() as f64;
@@ -302,30 +309,91 @@ fn test_ttest_verify_constant_time() {
 
 #[test]
 fn test_constant_time_compare_statistical() {
-    let equal_bytes = vec![0xABu8; 256];
-    let mut unequal_bytes = vec![0xABu8; 256];
-    unequal_bytes[128] = 0xCD;
+    #[derive(Clone, Copy)]
+    enum InputClass {
+        Equal,
+        Unequal,
+    }
 
-    let mut group_equal: Vec<f64> = Vec::new();
-    let mut group_unequal: Vec<f64> = Vec::new();
+    // Keep the memory layout equivalent between classes. Comparing a buffer with
+    // itself in one class and with a separate allocation in the other class
+    // measures alias/cache effects in addition to the byte contents.
+    let left_bytes = vec![0xABu8; 256];
+    let equal_right_bytes = vec![0xABu8; 256];
+    let mut unequal_right_bytes = vec![0xABu8; 256];
+    unequal_right_bytes[128] = 0xCD;
 
-    for _ in 0..N_SAMPLES {
+    assert!(ConstantTimeOps::constant_time_compare(
+        &left_bytes,
+        &equal_right_bytes
+    ));
+    assert!(!ConstantTimeOps::constant_time_compare(
+        &left_bytes,
+        &unequal_right_bytes
+    ));
+
+    // Warm both input classes before measurement so that first-touch and cold
+    // instruction-cache effects do not belong to just one class.
+    for _ in 0..CTCMP_WARMUP_ITERS {
+        black_box(ConstantTimeOps::constant_time_compare(
+            black_box(left_bytes.as_slice()),
+            black_box(equal_right_bytes.as_slice()),
+        ));
+        black_box(ConstantTimeOps::constant_time_compare(
+            black_box(left_bytes.as_slice()),
+            black_box(unequal_right_bytes.as_slice()),
+        ));
+    }
+
+    // Random interleaving prevents clock drift, scheduler state, and dynamic
+    // frequency changes from being systematically assigned to one class.
+    let mut classes = Vec::with_capacity(2 * CTCMP_SAMPLES_PER_CLASS);
+    classes.extend(std::iter::repeat_n(
+        InputClass::Equal,
+        CTCMP_SAMPLES_PER_CLASS,
+    ));
+    classes.extend(std::iter::repeat_n(
+        InputClass::Unequal,
+        CTCMP_SAMPLES_PER_CLASS,
+    ));
+    classes.shuffle(&mut StdRng::seed_from_u64(0x5041_4253_4354_434D));
+
+    let mut group_equal = Vec::with_capacity(CTCMP_SAMPLES_PER_CLASS);
+    let mut group_unequal = Vec::with_capacity(CTCMP_SAMPLES_PER_CLASS);
+
+    for class in classes {
+        let right_bytes = match class {
+            InputClass::Equal => equal_right_bytes.as_slice(),
+            InputClass::Unequal => unequal_right_bytes.as_slice(),
+        };
+
+        // A single 256-byte comparison is too close to timer overhead on some
+        // platforms. Measure a fixed-size batch and retain nanoseconds per call.
         let start = Instant::now();
-        let _ = ConstantTimeOps::constant_time_compare(&equal_bytes, &equal_bytes);
-        let elapsed = start.elapsed().as_nanos() as f64;
-        group_equal.push(elapsed);
+        for _ in 0..CTCMP_BATCH_ITERS {
+            black_box(ConstantTimeOps::constant_time_compare(
+                black_box(left_bytes.as_slice()),
+                black_box(right_bytes),
+            ));
+        }
+        let elapsed_per_call = start.elapsed().as_nanos() as f64 / CTCMP_BATCH_ITERS as f64;
 
-        let start = Instant::now();
-        let _ = ConstantTimeOps::constant_time_compare(&equal_bytes, &unequal_bytes);
-        let elapsed = start.elapsed().as_nanos() as f64;
-        group_unequal.push(elapsed);
+        match class {
+            InputClass::Equal => group_equal.push(elapsed_per_call),
+            InputClass::Unequal => group_unequal.push(elapsed_per_call),
+        }
     }
 
     let (t, p) = welch_t_test(&group_equal, &group_unequal);
+    let mean_equal = group_equal.iter().sum::<f64>() / group_equal.len() as f64;
+    let mean_unequal = group_unequal.iter().sum::<f64>() / group_unequal.len() as f64;
     eprintln!(
-        "[dudect-ctcmp] n_equal={}, n_unequal={}, t={:.4}, p={:.6}",
+        "[dudect-ctcmp] n_equal={}, n_unequal={}, batch={}, mean_equal_ns={:.4}, mean_unequal_ns={:.4}, t={:.4}, p={:.6}",
         group_equal.len(),
         group_unequal.len(),
+        CTCMP_BATCH_ITERS,
+        mean_equal,
+        mean_unequal,
         t,
         p
     );
