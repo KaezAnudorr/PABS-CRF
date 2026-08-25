@@ -1,0 +1,8 @@
+target/
+test-results/
+*.md
+!Cargo.toml
+scripts/
+*.py
+*.sh
+*.txt

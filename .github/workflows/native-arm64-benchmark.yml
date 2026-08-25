@@ -1,0 +1,89 @@
+name: Native ARM64 benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      iterations:
+        description: Timed signing and verification iterations per scheme
+        required: true
+        default: "100"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    name: Ubuntu 24.04 ARM64
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Record runner manifest
+        shell: bash
+        run: |
+          mkdir -p test-results/arm64
+          {
+            echo "timestamp_utc: $(date -u --iso-8601=seconds)"
+            echo "runner_name: ${RUNNER_NAME}"
+            echo "runner_os: ${RUNNER_OS}"
+            echo "runner_arch: ${RUNNER_ARCH}"
+            echo "image_os: ${ImageOS:-unknown}"
+            echo "image_version: ${ImageVersion:-unknown}"
+            echo "kernel: $(uname -srmo)"
+            echo "rustc: $(rustc --version --verbose | tr '\n' ';')"
+            echo "cargo: $(cargo --version)"
+            echo "iterations: ${{ inputs.iterations }}"
+            echo
+            lscpu
+            echo
+            free -h
+          } > test-results/arm64/runner-manifest.txt
+
+      - name: Build release benchmark
+        run: cargo build --locked --release --example matched_mldsa_baseline
+
+      - name: Measure all configurations in separate processes
+        shell: bash
+        env:
+          PABS_BENCH_ITERS: ${{ inputs.iterations }}
+        run: |
+          set -euo pipefail
+          schemes=(pabs-128 mldsa-44 pabs-192 mldsa-65 pabs-256 mldsa-87)
+          for scheme in "${schemes[@]}"; do
+            PABS_BENCH_OUTPUT="test-results/arm64/${scheme}_timing.json" \
+              /usr/bin/time -v \
+              -o "test-results/arm64/${scheme}_resources.txt" \
+              target/release/examples/matched_mldsa_baseline "${scheme}"
+          done
+
+      - name: Verify benchmark records
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          expected = {
+              "pabs-128", "mldsa-44", "pabs-192",
+              "mldsa-65", "pabs-256", "mldsa-87",
+          }
+          produced = {path.stem.removesuffix("_timing") for path in Path("test-results/arm64").glob("*_timing.json")}
+          if produced != expected:
+              raise SystemExit(f"unexpected timing records: {sorted(produced)}")
+          for path in Path("test-results/arm64").glob("*_timing.json"):
+              records = json.loads(path.read_text(encoding="utf-8"))
+              if len(records) != 1 or not records[0]["verification_passed"]:
+                  raise SystemExit(f"invalid benchmark result in {path}")
+          PY
+
+      - name: Upload raw ARM64 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: pabs-crf-native-arm64-${{ github.run_id }}
+          path: test-results/arm64
+          if-no-files-found: error
+          retention-days: 90

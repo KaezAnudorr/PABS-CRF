@@ -1,0 +1,53 @@
+# Rust build outputs
+/target/
+/dist/
+
+# Benchmark and test outputs
+/test-results/
+/benchmark_results_*.json
+
+# Local datasets and generated research vectors
+/data/material-vectors/
+
+# Local tool and editor configuration
+/.cargo/
+/.vscode/
+/.idea/
+*.swp
+*.tmp
+*.log
+.DS_Store
+Thumbs.db
+
+# Python caches and environments
+__pycache__/
+*.py[cod]
+/.venv/
+/venv/
+
+# Secrets and local environment files
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local research, review, deployment, and scratch material
+/academic_implementation_v4/
+/ALIYUN_RUNBOOK.md
+/CODE_OPTIMIZATION_SPEC_*.md
+/OPTIMIZATION_REPORT_*.md
+/PABS-CRF_v4_*.md
+/TOP_TIER_*.md
+/scheme_v3_rust_implementation.md
+/lattice_estimator_output.txt
+/bench_ntt.sh
+/check_bitrev.py
+/compare_ntt.py
+/debug_*.py
+/test_bit_reverse.py
+/test_correct_*.py
+/test_ntt_*.py
+/test_rejection.rs
+/trace_ntt.py
+/verify_*.py

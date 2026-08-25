@@ -1,0 +1,186 @@
+PABS-CRF Lattice Security Estimator
+====================================
+Method: Core-SVP (ADPS16) + Primal uSVP + Dual Attack
+Parameters from: academic_implementation_v4/src/mlwe.rs
+
+================================================================================
+  Parameter Set: PABS-CRF-128 (ML-DSA-44 eq.)
+  Target Security: 128-bit
+================================================================================
+
+  --- MLWE Parameters ---
+  Module rank k      = 4
+  Ring degree n      = 256
+  Total LWE dim k*n  = 1024
+  Modulus q          = 8380417 (≈ 2^23.0)
+  η₁ (secret)       = 2
+  η₂ (error)        = 2
+  σ (secret)        = 1.0000
+  σ (error)         = 1.0000
+  τ (challenge HW)  = 39
+  β (norm bound)    = 78
+
+  --- Module-LWE Analysis ---
+  Noise/Modulus      = 1.193258e-07
+  log₂(σ/q)         = -23.00
+
+  --- Core-SVP Estimation ---
+  Classical security = 2^116.8  (BKZ-β=400)
+  Quantum security   = 2^106.0  (BKZ-β=400)
+
+  --- Primal uSVP Attack ---
+  Classical security = 2^130.8  (β=400, d=2048)
+  Quantum security   = 2^120.0  (β=400)
+
+  --- Dual Attack ---
+  No feasible attack found within β ≤ 2048
+
+  --- BKZ Block Size Sweep ---
+      β          δ₀    lhs (log₂)    rhs (log₂)   Classical     Quantum   Solves?
+  -----  ----------  ------------  ------------  ----------  ----------  --------
+     40    1.012950          1.83        -17.37        11.7        10.6        no
+     50    1.012065          1.95        -15.41        14.6        13.2        no
+     60    1.011453          2.04        -14.00        17.5        15.9        no
+     70    1.010838          2.12        -12.62        20.4        18.6        no
+     80    1.010263          2.18        -11.32        23.4        21.2        no
+    100    1.009259          2.30         -9.08        29.2        26.5        no
+    120    1.008435          2.39         -7.23        35.0        31.8        no
+    140    1.007754          2.47         -5.70        40.9        37.1        no
+    160    1.007183          2.53         -4.41        46.7        42.4        no
+    180    1.006699          2.59         -3.31        52.6        47.7        no
+    200    1.006283          2.65         -2.36        58.4        53.0        no
+    250    1.005457          2.76         -0.47        73.0        66.2        no
+    300    1.004842          2.85          0.96        87.6        79.5        no
+    350    1.004365          2.93          2.09       102.2        92.8        no
+    400    1.003982          2.99          3.00       116.8       106.0       YES
+    500    1.003404          3.11          4.40       146.0       132.5       YES
+    600    1.002986          3.20          5.43       175.2       159.0       YES
+    700    1.002667          3.27          6.23       204.4       185.5       YES
+    800    1.002416          3.34          6.88       233.6       212.0       YES
+
+================================================================================
+  Parameter Set: PABS-CRF-192 (ML-DSA-65 eq.)
+  Target Security: 192-bit
+================================================================================
+
+  --- MLWE Parameters ---
+  Module rank k      = 6
+  Ring degree n      = 256
+  Total LWE dim k*n  = 1536
+  Modulus q          = 8380417 (≈ 2^23.0)
+  η₁ (secret)       = 2
+  η₂ (error)        = 2
+  σ (secret)        = 1.0000
+  σ (error)         = 1.0000
+  τ (challenge HW)  = 49
+  β (norm bound)    = 98
+
+  --- Module-LWE Analysis ---
+  Noise/Modulus      = 1.193258e-07
+  log₂(σ/q)         = -23.00
+
+  --- Core-SVP Estimation ---
+  Classical security = 2^197.4  (BKZ-β=676)
+  Quantum security   = 2^179.1  (BKZ-β=676)
+
+  --- Primal uSVP Attack ---
+  Classical security = 2^212.0  (β=676, d=3072)
+  Quantum security   = 2^193.7  (β=676)
+
+  --- Dual Attack ---
+  No feasible attack found within β ≤ 2048
+
+  --- BKZ Block Size Sweep ---
+      β          δ₀    lhs (log₂)    rhs (log₂)   Classical     Quantum   Solves?
+  -----  ----------  ------------  ------------  ----------  ----------  --------
+     40    1.012950          1.83        -30.55        11.7        10.6        no
+     50    1.012065          1.95        -27.69        14.6        13.2        no
+     60    1.011453          2.04        -25.66        17.5        15.9        no
+     70    1.010838          2.12        -23.65        20.4        18.6        no
+     80    1.010263          2.18        -21.78        23.4        21.2        no
+    100    1.009259          2.30        -18.51        29.2        26.5        no
+    120    1.008435          2.39        -15.83        35.0        31.8        no
+    140    1.007754          2.47        -13.61        40.9        37.1        no
+    160    1.007183          2.53        -11.74        46.7        42.4        no
+    180    1.006699          2.59        -10.15        52.6        47.7        no
+    200    1.006283          2.65         -8.78        58.4        53.0        no
+    250    1.005457          2.76         -6.04        73.0        66.2        no
+    300    1.004842          2.85         -3.98        87.6        79.5        no
+    350    1.004365          2.93         -2.37       102.2        92.8        no
+    400    1.003982          2.99         -1.07       116.8       106.0        no
+    500    1.003404          3.11          0.92       146.0       132.5        no
+    600    1.002986          3.20          2.38       175.2       159.0        no
+    700    1.002667          3.27          3.51       204.4       185.5       YES
+    800    1.002416          3.34          4.41       233.6       212.0       YES
+
+================================================================================
+  Parameter Set: PABS-CRF-256 (ML-DSA-87 eq.)
+  Target Security: 256-bit
+================================================================================
+
+  --- MLWE Parameters ---
+  Module rank k      = 8
+  Ring degree n      = 256
+  Total LWE dim k*n  = 2048
+  Modulus q          = 8380417 (≈ 2^23.0)
+  η₁ (secret)       = 2
+  η₂ (error)        = 2
+  σ (secret)        = 1.0000
+  σ (error)         = 1.0000
+  τ (challenge HW)  = 60
+  β (norm bound)    = 120
+
+  --- Module-LWE Analysis ---
+  Noise/Modulus      = 1.193258e-07
+  log₂(σ/q)         = -23.00
+
+  --- Core-SVP Estimation ---
+  Classical security = 2^282.4  (BKZ-β=967)
+  Quantum security   = 2^256.3  (BKZ-β=967)
+
+  --- Primal uSVP Attack ---
+  Classical security = 2^297.4  (β=967, d=4096)
+  Quantum security   = 2^271.3  (β=967)
+
+  --- Dual Attack ---
+  No feasible attack found within β ≤ 2048
+
+  --- BKZ Block Size Sweep ---
+      β          δ₀    lhs (log₂)    rhs (log₂)   Classical     Quantum   Solves?
+  -----  ----------  ------------  ------------  ----------  ----------  --------
+     40    1.012950          1.83        -43.72        11.7        10.6        no
+     50    1.012065          1.95        -39.97        14.6        13.2        no
+     60    1.011453          2.04        -37.32        17.5        15.9        no
+     70    1.010838          2.12        -34.69        20.4        18.6        no
+     80    1.010263          2.18        -32.23        23.4        21.2        no
+    100    1.009259          2.30        -27.95        29.2        26.5        no
+    120    1.008435          2.39        -24.43        35.0        31.8        no
+    140    1.007754          2.47        -21.52        40.9        37.1        no
+    160    1.007183          2.53        -19.07        46.7        42.4        no
+    180    1.006699          2.59        -16.98        52.6        47.7        no
+    200    1.006283          2.65        -15.19        58.4        53.0        no
+    250    1.005457          2.76        -11.61        73.0        66.2        no
+    300    1.004842          2.85         -8.93        87.6        79.5        no
+    350    1.004365          2.93         -6.83       102.2        92.8        no
+    400    1.003982          2.99         -5.14       116.8       106.0        no
+    500    1.003404          3.11         -2.56       146.0       132.5        no
+    600    1.002986          3.20         -0.67       175.2       159.0        no
+    700    1.002667          3.27          0.78       204.4       185.5        no
+    800    1.002416          3.34          1.94       233.6       212.0        no
+
+================================================================================
+  SECURITY SUMMARY
+================================================================================
+         Level     Classical       Quantum    Target    Meets?
+  ------------  ------------  ------------  --------  --------
+  PABS-CRF-128  2^ 116.8  2^ 106.0    128-bit  C:NO Q:NO
+  PABS-CRF-192  2^ 197.4  2^ 179.1    192-bit  C:YES Q:NO
+  PABS-CRF-256  2^ 282.4  2^ 256.3    256-bit  C:YES Q:YES
+
+  Notes:
+  - Classical: Core-SVP cost using ADPS16 sieving (0.292·β)
+  - Quantum:   Core-SVP cost using Grover-accelerated sieving (0.265·β)
+  - Meets = security bits ≥ target bits
+  - MLWE dimension = module_rank × ring_degree
+  - All parameters use q = 8380417, n = 256, η = 2
+
