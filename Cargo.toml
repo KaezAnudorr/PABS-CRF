@@ -8,10 +8,6 @@ homepage = "https://github.com/KaezAnudorr/PABS-CRF"
 repository = "https://github.com/KaezAnudorr/PABS-CRF"
 license = "MIT"
 
-[features]
-default = []
-avx512 = []
-
 [dependencies]
 rand = { version = "0.8", features = ["std_rng"] }
 subtle = "2.5"
@@ -24,7 +20,6 @@ sha2 = "0.10"
 sha3 = "0.10"
 ed25519-dalek = { version = "2.0", features = ["rand_core"] }
 tracing = "0.1"
-cpufeatures = "0.2"
 
 [dev-dependencies]
 criterion = "0.4"

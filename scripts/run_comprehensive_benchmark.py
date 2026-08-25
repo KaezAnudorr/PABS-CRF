@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """
-Comprehensive PABS-CRF Benchmark Runner with Full Optimization Testing
+Comprehensive PABS-CRF Benchmark Runner
 
 This script runs benchmarks with:
 - All security levels (L1/L3/L5)
 - All attribute counts (1, 3, 5, 10, 20)
 - All policy types (simple AND/OR, complex nested)
-- With/without AVX-512 optimization
 - NTT cache statistics
 - Puncture operations
 - Full data collection and analysis
@@ -37,7 +36,6 @@ COMPREHENSIVE_PATTERNS: list[tuple[str, str, type]] = [
     # Security level and test config
     ("security_level", r"Security Level:\s+(\d+)\s+bits", int),
     ("optimization_level", r"Optimization Level:\s+(\w+)", str),
-    ("avx512_enabled", r"AVX-512:\s+(ENABLED|DISABLED)", lambda x: x == "ENABLED"),
 
     # Cache statistics
     ("ntt_cache_capacity", r"NTT Cache: capacity=(\d+)", int),
@@ -159,13 +157,6 @@ def read_cpu_flags() -> list[str]:
     return []
 
 
-def has_avx512_support() -> bool:
-    """Check if CPU supports AVX-512"""
-    flags = read_cpu_flags()
-    avx512_flags = ["avx512f", "avx512bw", "avx512vl", "avx512dq"]
-    return any(flag in flags for flag in avx512_flags)
-
-
 def read_ram_gb() -> float | None:
     meminfo = Path("/proc/meminfo")
     if not meminfo.exists():
@@ -187,7 +178,6 @@ def collect_environment(project_dir: Path) -> dict[str, Any]:
         "uname": " ".join(platform.uname()),
         "cpu_model": read_first_cpu_model() or platform.processor() or "unknown",
         "cpu_flags": cpu_flags,
-        "cpu_avx512_support": has_avx512_support(),
         "ram_gb": read_ram_gb(),
         "rustc": command_text(["rustc", "--version"], project_dir),
         "cargo": command_text(["cargo", "--version"], project_dir),
@@ -236,7 +226,7 @@ def parse_comprehensive_output(stdout: str) -> list[dict[str, Any]]:
             if current_record and "sign_ms" in current_record:
                 records.append(current_record.copy())
                 # Keep security level and cache info for next record
-                keep_keys = ["security_level", "avx512_enabled", "keygen_attr_count"]
+                keep_keys = ["security_level", "keygen_attr_count"]
                 current_record = {k: v for k, v in current_record.items() if k in keep_keys}
 
     # Save final record
@@ -301,15 +291,8 @@ def summarize_records(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Comprehensive PABS-CRF benchmark with all optimizations"
-    )
+    parser = argparse.ArgumentParser(description="Comprehensive PABS-CRF benchmark")
     parser.add_argument("--rounds", type=int, default=10, help="Number of test rounds (default: 10)")
-    parser.add_argument(
-        "--test-avx512",
-        action="store_true",
-        help="Test both with and without AVX-512 (if CPU supports it)",
-    )
     parser.add_argument("--out-dir", type=Path, default=None)
     parser.add_argument("--skip-build", action="store_true")
     parser.add_argument("--timeout-sec", type=int, default=600, help="Timeout per test run (default: 600s)")
@@ -339,12 +322,6 @@ def main() -> int:
     test_configs = [
         {"name": "baseline", "features": ""},
     ]
-
-    if args.test_avx512 and environment.get("cpu_avx512_support"):
-        test_configs.append({"name": "avx512", "features": "avx512"})
-        print("✓ CPU supports AVX-512, will test both baseline and avx512")
-    elif args.test_avx512:
-        print("✗ CPU does not support AVX-512, testing baseline only")
 
     all_records = []
 

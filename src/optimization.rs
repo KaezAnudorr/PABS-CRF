@@ -9,21 +9,6 @@ impl Optimization {
         Self
     }
 
-    /// Enable AVX-512 optimization
-    #[deprecated(note = "use --features avx512 at compile time")]
-    #[cfg(feature = "avx512")]
-    pub fn enable_avx512(&self) {
-        println!(
-            "AVX-512 optimization enabled (deprecated: use --features avx512 at compile time)"
-        );
-    }
-
-    /// Enable SIMD optimization
-    #[deprecated(note = "use --features avx512 at compile time")]
-    pub fn enable_simd(&self) {
-        println!("SIMD optimization enabled (deprecated: use --features avx512 at compile time)");
-    }
-
     /// Optimize polynomial multiplication
     ///
     /// # Arguments

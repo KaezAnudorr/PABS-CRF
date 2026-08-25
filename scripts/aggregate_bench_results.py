@@ -28,9 +28,7 @@ def platform_label(doc):
         short_cpu = short_cpu[:28] + ".."
     feat = plat.get("cpu_features", [])
     feat_str = ""
-    if "avx512f" in feat:
-        feat_str = "+AVX512"
-    elif "avx2" in feat:
+    if "avx2" in feat:
         feat_str = "+AVX2"
     elif "neon" in feat:
         feat_str = "+NEON"

@@ -1,7 +1,6 @@
 //! NTT Performance Benchmark
 //!
-//! Tests polynomial multiplication performance with detailed timing
-//! and verifies AVX-512 SIMD acceleration when available.
+//! Tests polynomial multiplication performance with detailed timing.
 
 use pabs_crf::mlwe::Polynomial;
 use rand::{thread_rng, RngCore};
@@ -42,16 +41,6 @@ fn benchmark_ntt_performance() {
     println!("Iterations: {}", iterations);
     println!("Total time: {:.2} ms", elapsed_ntt.as_secs_f64() * 1000.0);
     println!("Average time: {:.2} μs/op", avg_ntt);
-
-    // Check if AVX-512 is available
-    #[cfg(target_feature = "avx512f")]
-    {
-        println!("AVX-512F: ✅ Available and enabled at compile time");
-    }
-    #[cfg(not(target_feature = "avx512f"))]
-    {
-        println!("AVX-512F: ❌ Not enabled at compile time (using scalar NTT)");
-    }
 
     // Performance thresholds (relaxed for WSL)
     // Native Linux: <50 μs

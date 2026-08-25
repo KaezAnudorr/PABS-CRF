@@ -33,7 +33,7 @@ for arg in "$@"; do
             echo "  --quick           Use sample-size 10 for fast results"
             echo "  --sample-size N   Set criterion sample size (default: 100)"
             echo "  --bench NAME      Cargo bench target name (default: sign)"
-            echo "  --features FEAT   Pass --features to cargo bench (e.g. avx512)"
+            echo "  --features FEAT   Pass an optional Cargo feature set to the benchmark"
             exit 0
             ;;
     esac
@@ -112,12 +112,6 @@ detect_cpu_features() {
                 local flags
                 flags="$(grep -m1 'flags' /proc/cpuinfo | cut -d: -f2)"
                 echo "$flags" | grep -qw avx2 && features+=("avx2")
-                echo "$flags" | grep -qw avx512f && features+=("avx512f")
-                echo "$flags" | grep -qw avx512dq && features+=("avx512dq")
-                echo "$flags" | grep -qw avx512vl && features+=("avx512vl")
-                echo "$flags" | grep -qw avx512cd && features+=("avx512cd")
-                echo "$flags" | grep -qw avx512bw && features+=("avx512bw")
-                echo "$flags" | grep -qw avx512ifma && features+=("avx512ifma")
                 echo "$flags" | grep -qw aes && features+=("aes")
                 echo "$flags" | grep -qw sse4_2 && features+=("sse4_2")
                 echo "$flags" | grep -qw fma && features+=("fma")

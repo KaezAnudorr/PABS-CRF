@@ -8,18 +8,7 @@
 //! - **Verification**: Check ||z||_∞ < γ₁ - β, recompute w₁' = UseHint(c₂, Az - ct),
 //!   verify c = H(tr, μ, w₁')
 //!
-//! NTT-optimized polynomial multiplication is used for n >= 64,
-//! with AVX-512 acceleration for n == 256 when available.
-
-#[cfg(feature = "avx512")]
-use std::arch::x86_64::{
-    __m512i, _mm512_add_epi64, _mm512_loadu_si512, _mm512_mullox_epi64, _mm512_set1_epi64,
-    _mm512_setr_epi64, _mm512_storeu_si512, _mm512_sub_epi64,
-};
-
-#[cfg(not(feature = "avx512"))]
-#[allow(unused_imports)]
-use std::arch::x86_64 as _dummy;
+//! NTT-optimized polynomial multiplication is used for n >= 64.
 
 use crate::errors::{PabsCrfError, PabsCrfResult};
 use rand::RngCore;
@@ -30,8 +19,6 @@ use std::hash::Hash;
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use tracing::debug;
 use zeroize::{Zeroize, ZeroizeOnDrop};
-
-cpufeatures::new!(avx512_id, "avx512f");
 
 #[derive(Clone)]
 struct NttPlan {
@@ -1635,40 +1622,17 @@ impl Polynomial {
 
     /// Multiply two polynomials in Z_q[X]/(X^n + 1) ring
     ///
-    /// Uses NTT-optimized multiplication for n >= 64, with AVX-512 acceleration
-    /// for n == 256 when available. Falls back to naive O(n²) for small polynomials.
+    /// Uses NTT-optimized multiplication for n >= 64 and falls back to naive
+    /// O(n²) multiplication for small polynomials.
     pub fn mul(&self, other: &Self, q: u32) -> Self {
         let n = self.coeffs.len();
         assert_eq!(n, other.coeffs.len());
 
         if n >= 64 {
-            #[cfg(feature = "avx512")]
-            {
-                if n == 256 && Self::avx512_available() {
-                    return Self::_mul_ntt_avx512(self, other, q);
-                }
-            }
             Self::_mul_ntt_optimized(self, other, q)
         } else {
             Self::_mul_naive(self, other, q)
         }
-    }
-
-    pub fn mul_scalar_fallback(&self, other: &Self, q: u32) -> Self {
-        let n = self.coeffs.len();
-        assert_eq!(n, other.coeffs.len());
-        if n >= 64 {
-            Self::_mul_ntt_optimized(self, other, q)
-        } else {
-            Self::_mul_naive(self, other, q)
-        }
-    }
-
-    /// Check if AVX-512 instructions are available on this CPU
-    ///
-    /// Uses CPUID detection for AVX-512F feature flag
-    pub fn avx512_available() -> bool {
-        avx512_id::get()
     }
 
     fn _mul_naive(a: &Self, b: &Self, q: u32) -> Self {
@@ -1754,58 +1718,6 @@ impl Polynomial {
         Self { coeffs }
     }
 
-    #[cfg(feature = "avx512")]
-    fn _mul_ntt_avx512(a: &Self, b: &Self, q: u32) -> Self {
-        let n = a.coeffs.len();
-        assert_eq!(n, 256);
-
-        let omega = 2962264u32;
-        let psi = 5199961u32;
-        let psi_inv = Self::_mod_exp(psi, q - 2, q);
-
-        let psi_powers: Vec<i32> = (0..n)
-            .map(|i| Self::_mod_exp(psi, i as u32, q) as i32)
-            .collect();
-        let psi_inv_powers: Vec<i32> = (0..n)
-            .map(|i| Self::_mod_exp(psi_inv, i as u32, q) as i32)
-            .collect();
-
-        let twiddles = Self::_precompute_twiddles(omega, q, n);
-        let twiddles_inv = Self::_precompute_twiddles(Self::_mod_exp(omega, q - 2, q), q, n);
-
-        let a_pre: Vec<i32> = (0..n)
-            .map(|i| ((a.coeffs[i] as i64 * psi_powers[i] as i64) % q as i64) as i32)
-            .collect();
-        let b_pre: Vec<i32> = (0..n)
-            .map(|i| ((b.coeffs[i] as i64 * psi_powers[i] as i64) % q as i64) as i32)
-            .collect();
-
-        let a_ntt = unsafe { Self::_ntt_avx512_core(&a_pre, q, &twiddles, n) };
-        let b_ntt = unsafe { Self::_ntt_avx512_core(&b_pre, q, &twiddles, n) };
-
-        let q_i64 = q as i64;
-        let mut c_ntt = vec![0i64; n];
-        unsafe {
-            let v_q = _mm512_set1_epi64(q_i64);
-            for i_base in (0..n).step_by(8) {
-                let a_vec = _mm512_loadu_si512(a_ntt.as_ptr().add(i_base) as *const _);
-                let b_vec = _mm512_loadu_si512(b_ntt.as_ptr().add(i_base) as *const _);
-                let prod = _mm512_mullox_epi64(a_vec, b_vec);
-                let reduced = Self::_barrett512(prod, v_q);
-                _mm512_storeu_si512(c_ntt.as_mut_ptr().add(i_base) as *mut _, reduced);
-            }
-        }
-
-        let n_inv = Self::_mod_exp(n as u32, q - 2, q);
-        let c_cyc = unsafe { Self::_intt_avx512_core(&c_ntt, q, &twiddles_inv, n_inv, n) };
-
-        let coeffs: Vec<i32> = (0..n)
-            .map(|i| ((c_cyc[i] as i64 * psi_inv_powers[i] as i64) % q_i64) as i32)
-            .collect();
-
-        Self { coeffs }
-    }
-
     pub fn _precompute_twiddles(omega: u32, q: u32, n: usize) -> Vec<Vec<i64>> {
         let q_i64 = q as i64;
         let mut twiddles = Vec::new();
@@ -1874,226 +1786,6 @@ impl Polynomial {
 
         for x in &mut result {
             *x = (*x * n_inv_i64) % q_i64;
-        }
-
-        result
-            .iter()
-            .map(|&x| ((x % q_i64 + q_i64) % q_i64) as i32)
-            .collect()
-    }
-
-    #[cfg(feature = "avx512")]
-    #[target_feature(enable = "avx512f,avx512dq,avx512vl")]
-    pub unsafe fn _barrett512(v: __m512i, q: __m512i) -> __m512i {
-        // Extract q scalar from first lane using store
-        let mut q_arr: [i64; 8] = [0; 8];
-        _mm512_storeu_si512(q_arr.as_mut_ptr() as *mut _, q);
-        let q_scalar = q_arr[0];
-        let q_u64 = q_scalar as u64;
-
-        let mut vals: [i64; 8] = [0; 8];
-        _mm512_storeu_si512(vals.as_mut_ptr() as *mut _, v);
-        for i in 0..8 {
-            let vi = vals[i];
-            let rem = if vi < 0 {
-                // For negative values, convert to u64 equivalent first
-                let vu = ((vi % q_scalar) + q_scalar) as u64;
-                (vu % q_u64) as i64
-            } else {
-                let vu = vi as u64;
-                ((vu as u128) % (q_u64 as u128)) as i64
-            };
-            vals[i] = rem;
-        }
-        _mm512_loadu_si512(vals.as_ptr() as *const _)
-    }
-
-    /// AVX-512 NTT core
-    #[cfg(feature = "avx512")]
-    #[target_feature(enable = "avx512f,avx512dq,avx512vl")]
-    unsafe fn _ntt_avx512_core(a: &[i32], q: u32, twiddles: &[Vec<i64>], n: usize) -> Vec<i64> {
-        let q_i64 = q as i64;
-
-        // Bit-reverse input first
-        let mut result = Self::_bit_reverse(&a.iter().map(|&x| x as i64).collect::<Vec<_>>(), n);
-
-        for stage in 0..twiddles.len() {
-            let k = twiddles[stage].len();
-            let m = 2 * k;
-
-            for j in (0..n).step_by(m) {
-                if k < 8 {
-                    for i in 0..k {
-                        let u = result[j + i];
-                        let v = result[j + i + k];
-                        let t = (twiddles[stage][i] * v) % q_i64;
-                        result[j + i] = (u + t) % q_i64;
-                        result[j + i + k] = ((u - t) % q_i64 + q_i64) % q_i64;
-                    }
-                    continue;
-                }
-
-                for i_base in (0..k).step_by(8) {
-                    let i_end = (i_base + 8).min(k);
-                    let count = i_end - i_base;
-
-                    if count < 8 {
-                        for i in i_base..i_end {
-                            let u = result[j + i];
-                            let v = result[j + i + k];
-                            let t = (twiddles[stage][i] * v) % q_i64;
-                            result[j + i] = (u + t) % q_i64;
-                            result[j + i + k] = ((u - t) % q_i64 + q_i64) % q_i64;
-                        }
-                        continue;
-                    }
-
-                    let tw: [i64; 8] = std::array::from_fn(|idx| twiddles[stage][i_base + idx]);
-                    let u_arr: [i64; 8] = std::array::from_fn(|idx| result[j + i_base + idx]);
-                    let v_arr: [i64; 8] = std::array::from_fn(|idx| result[j + i_base + k + idx]);
-
-                    let v_q = _mm512_set1_epi64(q_i64);
-                    let t_raw = _mm512_mullox_epi64(
-                        _mm512_setr_epi64(tw[0], tw[1], tw[2], tw[3], tw[4], tw[5], tw[6], tw[7]),
-                        _mm512_setr_epi64(
-                            v_arr[0], v_arr[1], v_arr[2], v_arr[3], v_arr[4], v_arr[5], v_arr[6],
-                            v_arr[7],
-                        ),
-                    );
-
-                    let t_red = Self::_barrett512(t_raw, v_q);
-
-                    let u_vec = _mm512_setr_epi64(
-                        u_arr[0], u_arr[1], u_arr[2], u_arr[3], u_arr[4], u_arr[5], u_arr[6],
-                        u_arr[7],
-                    );
-
-                    let res_add = _mm512_add_epi64(u_vec, t_red);
-                    let res_sub = _mm512_sub_epi64(u_vec, t_red);
-
-                    let mut add_vals: [i64; 8] = [0; 8];
-                    let mut sub_vals: [i64; 8] = [0; 8];
-                    _mm512_storeu_si512(
-                        add_vals.as_mut_ptr() as *mut _,
-                        Self::_barrett512(res_add, v_q),
-                    );
-                    _mm512_storeu_si512(
-                        sub_vals.as_mut_ptr() as *mut _,
-                        Self::_barrett512(res_sub, v_q),
-                    );
-
-                    for idx in 0..8 {
-                        result[j + i_base + idx] = add_vals[idx];
-                        result[j + i_base + idx + k] = sub_vals[idx];
-                    }
-                }
-            }
-        }
-
-        result
-    }
-
-    #[cfg(feature = "avx512")]
-    #[target_feature(enable = "avx512f,avx512dq,avx512vl")]
-    pub unsafe fn _intt_avx512_core(
-        a: &[i64],
-        q: u32,
-        twiddles_inv: &[Vec<i64>],
-        n_inv: u32,
-        n: usize,
-    ) -> Vec<i32> {
-        let q_i64 = q as i64;
-        let n_inv_i64 = n_inv as i64;
-
-        let mut result = Self::_bit_reverse(a, n);
-
-        for stage in 0..twiddles_inv.len() {
-            let k = twiddles_inv[stage].len();
-            let m = 2 * k;
-
-            for j in (0..n).step_by(m) {
-                if k < 8 {
-                    for i in 0..k {
-                        let u = result[j + i];
-                        let v = result[j + i + k];
-                        let t = (twiddles_inv[stage][i] * v) % q_i64;
-                        result[j + i] = (u + t) % q_i64;
-                        result[j + i + k] = ((u - t) % q_i64 + q_i64) % q_i64;
-                    }
-                    continue;
-                }
-
-                for i_base in (0..k).step_by(8) {
-                    let i_end = (i_base + 8).min(k);
-                    let count = i_end - i_base;
-
-                    if count < 8 {
-                        for i in i_base..i_end {
-                            let u = result[j + i];
-                            let v = result[j + i + k];
-                            let t = (twiddles_inv[stage][i] * v) % q_i64;
-                            result[j + i] = (u + t) % q_i64;
-                            result[j + i + k] = ((u - t) % q_i64 + q_i64) % q_i64;
-                        }
-                        continue;
-                    }
-
-                    let tw: [i64; 8] = std::array::from_fn(|idx| twiddles_inv[stage][i_base + idx]);
-                    let u_arr: [i64; 8] = std::array::from_fn(|idx| result[j + i_base + idx]);
-                    let v_arr: [i64; 8] = std::array::from_fn(|idx| result[j + i_base + k + idx]);
-
-                    let v_q = _mm512_set1_epi64(q_i64);
-                    let t_raw = _mm512_mullox_epi64(
-                        _mm512_setr_epi64(tw[0], tw[1], tw[2], tw[3], tw[4], tw[5], tw[6], tw[7]),
-                        _mm512_setr_epi64(
-                            v_arr[0], v_arr[1], v_arr[2], v_arr[3], v_arr[4], v_arr[5], v_arr[6],
-                            v_arr[7],
-                        ),
-                    );
-
-                    let t_red = Self::_barrett512(t_raw, v_q);
-
-                    let u_vec = _mm512_setr_epi64(
-                        u_arr[0], u_arr[1], u_arr[2], u_arr[3], u_arr[4], u_arr[5], u_arr[6],
-                        u_arr[7],
-                    );
-
-                    let res_add = _mm512_add_epi64(u_vec, t_red);
-                    let res_sub = _mm512_sub_epi64(u_vec, t_red);
-
-                    let mut add_vals: [i64; 8] = [0; 8];
-                    let mut sub_vals: [i64; 8] = [0; 8];
-                    _mm512_storeu_si512(
-                        add_vals.as_mut_ptr() as *mut _,
-                        Self::_barrett512(res_add, v_q),
-                    );
-                    _mm512_storeu_si512(
-                        sub_vals.as_mut_ptr() as *mut _,
-                        Self::_barrett512(res_sub, v_q),
-                    );
-
-                    for idx in 0..8 {
-                        result[j + i_base + idx] = add_vals[idx];
-                        result[j + i_base + idx + k] = sub_vals[idx];
-                    }
-                }
-            }
-        }
-
-        let v_ninv = _mm512_set1_epi64(n_inv_i64);
-        let v_q = _mm512_set1_epi64(q_i64);
-        for i_base in (0..n).step_by(8) {
-            let count = (i_base + 8).min(n) - i_base;
-            if count < 8 {
-                for i in i_base..i_base + count {
-                    result[i] = (result[i] * n_inv_i64) % q_i64;
-                }
-                continue;
-            }
-            let vals = _mm512_loadu_si512(result.as_ptr().add(i_base) as *const _);
-            let mulled = _mm512_mullox_epi64(vals, v_ninv);
-            let reduced = Self::_barrett512(mulled, v_q);
-            _mm512_storeu_si512(result.as_mut_ptr().add(i_base) as *mut _, reduced);
         }
 
         result

@@ -309,7 +309,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Criterion bench target. Repeat for multiple targets. Default in criterion/all: sign.",
     )
     parser.add_argument("--criterion-sample-size", type=int, default=10)
-    parser.add_argument("--features", default="", help="Cargo feature string, for example: avx512.")
+    parser.add_argument("--features", default="", help="Optional Cargo feature string.")
     parser.add_argument("--out-dir", type=Path, default=None)
     parser.add_argument("--skip-build", action="store_true")
     parser.add_argument("--timeout-sec", type=int, default=None)

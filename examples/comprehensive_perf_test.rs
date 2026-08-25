@@ -1,6 +1,6 @@
 //! Comprehensive Performance Test for PABS-CRF
 //!
-//! Tests all security levels, attribute counts, policy types, and optimizations.
+//! Tests all security levels, attribute counts, and policy types.
 
 use pabs_crf::*;
 use rand::thread_rng;
@@ -14,14 +14,6 @@ fn duration_ms(d: std::time::Duration) -> f64 {
 fn main() {
     println!("=== PABS-CRF Comprehensive Performance Test ===");
     println!("Build Configuration:");
-    println!(
-        "  - AVX-512: {}",
-        if cfg!(feature = "avx512") {
-            "ENABLED"
-        } else {
-            "DISABLED"
-        }
-    );
     println!(
         "  - Optimization Level: {}",
         if cfg!(debug_assertions) {

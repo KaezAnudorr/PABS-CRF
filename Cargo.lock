@@ -549,7 +549,6 @@ name = "pabs-crf"
 version = "0.1.0"
 dependencies = [
  "bincode",
- "cpufeatures",
  "criterion",
  "ed25519-dalek",
  "fips204",

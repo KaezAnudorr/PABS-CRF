@@ -72,16 +72,8 @@ if [ -f /proc/cpuinfo ]; then
     cpu_model=$(grep -m1 "model name" /proc/cpuinfo | cut -d: -f2 | xargs)
     echo "   CPU: $cpu_model"
 
-    if grep -q "avx512" /proc/cpuinfo; then
-        echo "   ✓ AVX-512 supported"
-        avx512_support=true
-    else
-        echo "   ℹ AVX-512 not supported (will test baseline only)"
-        avx512_support=false
-    fi
 else
     echo "   ℹ /proc/cpuinfo not available (non-Linux system?)"
-    avx512_support=false
 fi
 
 echo
@@ -107,13 +99,8 @@ echo "a) Quick smoke test (3 rounds, ~10 minutes):"
 echo "   python3 scripts/run_comprehensive_benchmark.py --rounds 3 $skip_build"
 echo
 
-if [ "$avx512_support" = true ]; then
-    echo "b) Full test with AVX-512 (10 rounds, ~60 minutes):"
-    echo "   python3 scripts/run_comprehensive_benchmark.py --rounds 10 --test-avx512 $skip_build"
-else
-    echo "b) Full test baseline (10 rounds, ~30 minutes):"
-    echo "   python3 scripts/run_comprehensive_benchmark.py --rounds 10 $skip_build"
-fi
+echo "b) Full test (10 rounds, ~30 minutes):"
+echo "   python3 scripts/run_comprehensive_benchmark.py --rounds 10 $skip_build"
 echo
 
 echo "c) Manual build and run:"
