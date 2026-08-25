@@ -315,35 +315,38 @@ fn test_constant_time_compare_statistical() {
         Unequal,
     }
 
-    // Keep the memory layout equivalent between classes. Comparing a buffer with
-    // itself in one class and with a separate allocation in the other class
-    // measures alias/cache effects in addition to the byte contents.
+    // Use a separate right-hand allocation, but keep its address identical for
+    // both classes. Otherwise a persistent cache or address-layout difference
+    // can be mistaken for a content-dependent timing difference.
     let left_bytes = vec![0xABu8; 256];
-    let equal_right_bytes = vec![0xABu8; 256];
-    let mut unequal_right_bytes = vec![0xABu8; 256];
-    unequal_right_bytes[128] = 0xCD;
+    let mut right_bytes = vec![0xABu8; 256];
 
     assert!(ConstantTimeOps::constant_time_compare(
         &left_bytes,
-        &equal_right_bytes
+        &right_bytes
     ));
+    right_bytes[128] = 0xCD;
     assert!(!ConstantTimeOps::constant_time_compare(
         &left_bytes,
-        &unequal_right_bytes
+        &right_bytes
     ));
+    right_bytes[128] = 0xAB;
 
     // Warm both input classes before measurement so that first-touch and cold
     // instruction-cache effects do not belong to just one class.
     for _ in 0..CTCMP_WARMUP_ITERS {
+        right_bytes[128] = black_box(0xAB);
         black_box(ConstantTimeOps::constant_time_compare(
             black_box(left_bytes.as_slice()),
-            black_box(equal_right_bytes.as_slice()),
+            black_box(right_bytes.as_slice()),
         ));
+        right_bytes[128] = black_box(0xCD);
         black_box(ConstantTimeOps::constant_time_compare(
             black_box(left_bytes.as_slice()),
-            black_box(unequal_right_bytes.as_slice()),
+            black_box(right_bytes.as_slice()),
         ));
     }
+    right_bytes[128] = 0xAB;
 
     // Random interleaving prevents clock drift, scheduler state, and dynamic
     // frequency changes from being systematically assigned to one class.
@@ -362,9 +365,15 @@ fn test_constant_time_compare_statistical() {
     let mut group_unequal = Vec::with_capacity(CTCMP_SAMPLES_PER_CLASS);
 
     for class in classes {
-        let right_bytes = match class {
-            InputClass::Equal => equal_right_bytes.as_slice(),
-            InputClass::Unequal => unequal_right_bytes.as_slice(),
+        right_bytes[128] = black_box(match class {
+            InputClass::Equal => 0xAB,
+            InputClass::Unequal => 0xCD,
+        });
+        let measured_right_bytes = black_box(right_bytes.as_slice());
+
+        let expected = match class {
+            InputClass::Equal => true,
+            InputClass::Unequal => false,
         };
 
         // A single 256-byte comparison is too close to timer overhead on some
@@ -373,10 +382,15 @@ fn test_constant_time_compare_statistical() {
         for _ in 0..CTCMP_BATCH_ITERS {
             black_box(ConstantTimeOps::constant_time_compare(
                 black_box(left_bytes.as_slice()),
-                black_box(right_bytes),
+                measured_right_bytes,
             ));
         }
         let elapsed_per_call = start.elapsed().as_nanos() as f64 / CTCMP_BATCH_ITERS as f64;
+
+        debug_assert_eq!(
+            ConstantTimeOps::constant_time_compare(&left_bytes, &right_bytes),
+            expected
+        );
 
         match class {
             InputClass::Equal => group_equal.push(elapsed_per_call),
